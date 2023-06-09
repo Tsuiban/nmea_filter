@@ -70,43 +70,6 @@ impl Uniques {
 fn main() {
     let cli = Cli::parse();
     let mut uniques = Uniques::new();
-    /*
-        if cli.include_messages.is_some() {
-            let i =
-                cli
-                .include_messages
-                .as_ref()
-                .unwrap();
-            eprintln!("Include only {}", display_vec(&i));
-        }
-
-        if cli.exclude_messages.is_some() {
-            let e =
-                cli
-                .exclude_messages
-                .as_ref()
-                .unwrap();
-            eprintln!("Exclude {}", display_vec(&e));
-        }
-
-        if cli.include_talkers.is_some() {
-            let i =
-                cli
-                .include_talkers
-                .as_ref()
-                .unwrap();
-            eprintln!("Include {}", display_vec(&i));
-        }
-
-        if cli.exclude_talkers.is_some() {
-            let e =
-                cli
-                .exclude_talkers
-                .as_ref()
-                .unwrap();
-            eprintln!("Exclude {}", display_vec(&e));
-        }
-    */
     if cli.filenames.is_some() {
         for f in &cli.filenames.clone().unwrap() {
             match File::open(f) {
