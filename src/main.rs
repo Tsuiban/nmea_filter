@@ -52,37 +52,89 @@ struct Cli {
 	#[arg(long,short='V')]
 	valid : bool,
 }
+
+struct Uniques {
+	talkers : Vec<String>,
+	messages : Vec<String>,
+}
+
+impl Uniques {
+	pub fn new() -> Uniques {
+		Uniques {
+			talkers : Vec::new(),
+			messages : Vec::new(),
+		}
+	}
+}
 	  
 fn main() {
 	let cli = Cli::parse();
+	let mut uniques = Uniques::new();
+/*
+	if cli.include_messages.is_some() {
+		let i =
+			cli
+			.include_messages
+			.as_ref()
+			.unwrap();
+		eprintln!("Include only {}", display_vec(&i));
+	}
 
+	if cli.exclude_messages.is_some() {
+		let e =
+			cli
+			.exclude_messages
+			.as_ref()
+			.unwrap();
+		eprintln!("Exclude {}", display_vec(&e));
+	}
+
+	if cli.include_talkers.is_some() {
+		let i =
+			cli
+			.include_talkers
+			.as_ref()
+			.unwrap();
+		eprintln!("Include {}", display_vec(&i));
+	}
+
+	if cli.exclude_talkers.is_some() {
+		let e = 
+			cli
+			.exclude_talkers
+			.as_ref()
+			.unwrap();
+		eprintln!("Exclude {}", display_vec(&e));
+	}
+*/
 	if cli.filenames.is_some() {
 		for f in &cli.filenames.clone().unwrap() {
 			match File::open(f) {
-				Ok(f) => { process_file(&mut BufReader::new(f), &cli); }
+				Ok(f) => { process_file(&mut BufReader::new(f), &cli, &mut uniques); }
 				Err(e) => { eprintln!("{}", e); }
 			}
 		}
 	} else {
-		process_file(&mut BufReader::new(stdin()), &cli);
+		process_file(&mut BufReader::new(stdin()), &cli, &mut uniques);
 	}
 }
 
-fn process_file(reader : &mut dyn BufRead, cli : &Cli) {
-	let mut unique_messages : Vec<String> = Vec::new();
-	let mut unique_talkers : Vec<String> = Vec::new();
+fn display_vec<T>(v : &Vec<T>) -> String where T: std::fmt::Display {
+	let mut ret_string = String::new();
+	for item in v {
+		if !ret_string.is_empty() {
+			ret_string.push(',');
+		};
+		ret_string.push_str(&(*item).to_string());
+	};
+	ret_string
+}
+
+fn process_file(reader : &mut dyn BufRead, cli : &Cli, uniques : &mut Uniques) {
 	let mut current_time = NaiveTime::default();
 	for line in reader.lines() {
 		if let Ok(line) = line {
 			let sentence = NmeaBaseSentence::from(&line);
-			let talker = sentence.sender();
-			let message_type = sentence.message_type();
-			if cli.list_unique_talkers && !unique_talkers.contains(&talker) {
-				unique_talkers.push(talker.clone());
-			}
-			if cli.list_unique_messages && !unique_messages.contains(&message_type) {
-				unique_messages.push(message_type.clone());
-			}
 			if sentence.is_valid() {
 				let mut new_time = None;
 				match sentence.message_type().as_str() {
@@ -108,32 +160,32 @@ fn process_file(reader : &mut dyn BufRead, cli : &Cli) {
 				if let Some(new_time) = new_time {
 					current_time = new_time;
 				}
-				//println!("{:?} -- {:?} -- {:?}", &cli.start_time, &current_time, &cli.end_time);
-				
+
 				if current_time >= cli.start_time && current_time <= cli.end_time {
 					if is_in(&cli.include_messages, &sentence.message_type()) {
-							pass_through(&cli, &sentence.sender(), &line);
-					} else if !cli.exclude_messages.is_some() || !is_in(&cli.exclude_messages, &sentence.message_type()) {
-						pass_through(&cli, &sentence.sender(), &line);
-					} else if cli.valid {
-						pass_through(&cli, &sentence.sender(), &line);
+							pass_through(&cli, &sentence, uniques);
+					} else if cli.exclude_messages.is_none() || !is_in(&cli.exclude_messages, &sentence.message_type()) {
+						pass_through(&cli, &sentence, uniques);
+					} else if cli.include_messages.is_none() && cli.exclude_messages.is_none() {
+						pass_through(&cli, &sentence, uniques);
 					}
 				}
 			}
 		}
 	}
 	if cli.list_unique_talkers {
-		unique_talkers.sort();
-		println!("Unique Talkers: {:?}", unique_talkers)
+		(*uniques).talkers.sort();
+		println!("Unique Talkers: {}", display_vec(&uniques.talkers))
 	}
 
 	if cli.list_unique_messages {
-		unique_messages.sort();
-		println!("Unique messages: {:?}", unique_messages)
+		uniques.messages.sort();
+		println!("Unique messages: {}", display_vec(&uniques.messages))
 	}
 }
 
-fn pass_through(cli : &Cli, sender : &String, line : &String) {
+fn pass_through(cli : &Cli, sentence : &NmeaBaseSentence, uniques : &mut Uniques) {
+	let sender = &sentence.sender();
 	if (
 		cli.exclude_talkers.is_some() &&
 			!cli
@@ -148,8 +200,25 @@ fn pass_through(cli : &Cli, sender : &String, line : &String) {
 				.as_ref()
 				.unwrap()
 				.contains(sender)
+	) || (
+		!cli.exclude_talkers.is_some() &&
+		!cli.include_talkers.is_some()
 	) {
-		println!("{}", line);
+		let talker = sentence.sender();
+		let message_type = sentence.message_type();
+		if cli.list_unique_talkers &&
+			!uniques.talkers.contains(&talker) &&
+			talker.ne("") {
+			(*uniques).talkers.push(talker.clone());
+		}
+		if cli.list_unique_messages &&
+			!uniques.messages.contains(&message_type) &&
+			message_type.ne("") {
+			uniques.messages.push(message_type.clone());
+		}
+		if !cli.list_unique_messages && !cli.list_unique_talkers {
+			println!("{}", &sentence.original().unwrap());
+		}
 	}
 }
 
